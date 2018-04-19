@@ -1,0 +1,4 @@
+sensor.cfg
+.mypy_cache/
+.pytest_cache/
+recieved_data.txt
