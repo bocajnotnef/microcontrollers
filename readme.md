@@ -4,7 +4,9 @@ This is a general repository for all my microcontroller projects. I'll eventuall
 
 ## Greenhouse
 
-This is a project to automate environmental monitoring and control of a greenhouse.
+This is a project to automate environmental monitoring and control of a greenhouse. There are (currently) two components; a `sensor.py` module, designed to be deployed on an ESP8266 to collect DHT11 and soil moisture data, and a `server.py` program, designed to be deployed on a raspberry pi to collect the sensor's data and distill it.
+
+The server will eventually grow into command and control for the greenhouse environment, and sensors will be adapted to handle different sensor types.
 
 ## Notes
 
