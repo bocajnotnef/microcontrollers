@@ -1,6 +1,12 @@
+import dht
+import machine
+import network
+import socket
+import time
+import ubinascii
+
 NETNAME = None
 NETPASS = None
-
 SERVIP = None
 SERVPORT = None
 
@@ -14,18 +20,12 @@ with open(CONFIGFILENAME, 'r') as cfile:
     SERVPORT = int(lines[3][:-1])
 
 
-import machine
-import dht
-import network
-import time
-import socket
-import ubinascii
-
-mac = ubinascii.hexlify(network.WLAN().config('mac'),':').decode()
-
-
+mac = ubinascii.hexlify(network.WLAN().config('mac'), ':').decode()
 status_led = machine.Pin(2, machine.Pin.OUT)
-led_state = True # annoyingly, status_led.on() turns it off
+led_state = True  # annoyingly, status_led.on() turns it off
+adc = machine.ADC(0)
+d = dht.DHT11(machine.Pin(5))
+
 
 def do_connect():
     global led_state
@@ -46,9 +46,6 @@ def do_connect():
     status_led.off()
 
 
-adc = machine.ADC(0)
-d = dht.DHT11(machine.Pin(5))
-
 def do_run():
     global status_led
     global mac
@@ -61,7 +58,7 @@ def do_run():
             try:
                 s = socket.socket()
                 s.connect((SERVIP, SERVPORT))
-                # s.send("Initializing link...\n")
+
                 socket_connected = True
             except OSError:
                 print("Socket connection failed... waiting.")
@@ -80,13 +77,16 @@ def do_run():
 
         status_led.on()
         d.measure()
-        msg = "Soil: " + str(adc.read()) + "; temp: " + str(d.temperature()) + "; hum: " + str(d.humidity()) + "; from " + mac + "\n"
+        soil_str = str(adc.read())
+        temp_str = str(d.temperature())
+        hum_str = str(d.humidity())
+
+        msg = "Soil: " + soil_str + "; temp: " + temp_str + "; hum: " + hum_str + "; from " + mac
         print(msg)
         try:
-            q = s.send(msg)
+            q = s.send(msg + "\n")
         except OSError:
             socket_connected = False
         print("Sent ", q, " bytes.")
         status_led.off()
         time.sleep(2)
-

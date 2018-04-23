@@ -1,4 +1,5 @@
-**/sensor.cfg
 .mypy_cache/
 .pytest_cache/
+**/.vscode
 **/recieved_data.txt
+**/sensor.cfg

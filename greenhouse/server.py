@@ -72,7 +72,12 @@ class DBWriter(threading.Thread):
         global shared_list
 
         connection = sqlite3.connect("greenhouse.db")
-        connection.execute("CREATE TABLE if not exists readings (source text, airtemp real, humidity real, soil_moisture int, timestamp text);")
+        connection.execute("CREATE TABLE if not exists readings "
+                           "(source text, "
+                           "airtemp real, "
+                           "humidity real, "
+                           "soil_moisture int, "
+                           "timestamp text);")
 
         while threads_run:
             time.sleep(60)
