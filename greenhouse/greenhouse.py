@@ -44,7 +44,7 @@ def do_connect():
             time.sleep(0.25)
     print('network config:', sta_if.ifconfig())
     status_led.off()
-    
+
 
 adc = machine.ADC(0)
 d = dht.DHT11(machine.Pin(5))
@@ -52,16 +52,16 @@ d = dht.DHT11(machine.Pin(5))
 def do_run():
     global status_led
     global mac
-    
+
     socket_connected = False
-    
+
     while True:
-        
+
         while not socket_connected:
             try:
                 s = socket.socket()
                 s.connect((SERVIP, SERVPORT))
-                s.send("Initializing link...\n")
+                # s.send("Initializing link...\n")
                 socket_connected = True
             except OSError:
                 print("Socket connection failed... waiting.")
@@ -77,7 +77,7 @@ def do_run():
                 status_led.on()
                 time.sleep(0.1)
                 status_led.off()
-                
+
         status_led.on()
         d.measure()
         msg = "Soil: " + str(adc.read()) + "; temp: " + str(d.temperature()) + "; hum: " + str(d.humidity()) + "; from " + mac + "\n"
