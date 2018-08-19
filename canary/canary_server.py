@@ -1,7 +1,11 @@
 #! /usr/bin/env python3
 
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from typing import List, Optional
+import configparser
 import datetime
+import smtplib
 import socket
 import threading
 import time
@@ -12,6 +16,7 @@ threads_run = False
 shared_timestamp: Optional[datetime.datetime] = None
 
 TIMEOUT_IN_SECONDS = 10
+CONFIG_FILENAME = "server.ini"
 
 
 class Listener(threading.Thread):
@@ -39,6 +44,35 @@ class Notifier(threading.Thread):
         super(Notifier, self).__init__()
         print("Starting notifier thread...")
 
+    @staticmethod
+    def notify():
+        conf = configparser.ConfigParser()
+
+        conf.read(CONFIG_FILENAME)
+
+        from_addr = conf['DEFAULT']['EmailUser']
+
+        smtp_server = smtplib.SMTP(host=conf['DEFAULT']['EmailDomain'], port=conf['DEFAULT']['EmailSTARTTLSPort'])
+        smtp_server.starttls()
+        smtp_server.login(from_addr, conf['DEFAULT']['EmailPassword'])
+
+        msg = MIMEMultipart()       # create a message
+
+        # add in the actual person name to the message template
+        message = f"Holy crap, the canary died! Time is {datetime.datetime.now()}"
+        print(f"Message reads '{message}'")
+
+        # setup the parameters of the message
+        msg['From'] = from_addr
+        msg['To'] = conf['DEFAULT']['EmailTarget']
+        msg['Subject'] = conf['DEFAULT']['EmailSubject']
+
+        # add in the message body
+        msg.attach(MIMEText(message, 'plain'))
+
+        # send the message via the server set up earlier.
+        smtp_server.send_message(msg)
+
     def run(self):
         global threads_run
         global shared_timestamp
@@ -52,6 +86,8 @@ class Notifier(threading.Thread):
                 print("Something odd happened.... (Have we made a connection yet?)")
             elif shared_timestamp < timeout_point:
                 print("OH GOD WHERE ARE THEY SOUND THE ALARM")
+                Notifier.notify()
+                threads_run = False
             else:
                 print("Notifier sleeps")
             time.sleep(TIMEOUT_IN_SECONDS)
