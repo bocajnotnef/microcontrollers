@@ -3,3 +3,6 @@
 **/.vscode
 **/recieved_data.txt
 **/sensor.cfg
+*.swp
+.*
+!.gitignore
