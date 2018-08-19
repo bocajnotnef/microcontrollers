@@ -17,3 +17,11 @@ bin/ Licenses and ownerships:
 | filename | responsible organization | governing license|
 |----------|--------------------------|------------------|
 |esp8266-20171101-v1.9.3.bin|Micropython|MIT|
+
+## Tools
+
+note: might have to modify permissions of `/dev/ttyUSB*`
+
+Use `adafruit-ampy` to copy and list files [github](https://github.com/adafruit/ampy) [usage examples](https://learn.adafruit.com/micropython-basics-load-files-and-run-code/file-operations)
+
+use `picocom` to connect to the board's REPL a la ` picocom /dev/ttyUSB0 -b115200`
