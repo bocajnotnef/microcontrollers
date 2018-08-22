@@ -87,6 +87,7 @@ class Notifier(threading.Thread):
             timeout_point = datetime.datetime.now() - datetime.timedelta(seconds=TIMEOUT_IN_SECONDS)
             if shared_timestamp is None:
                 print("Something odd happened.... (Have we made a connection yet?)")
+                self.canary_alive = True
             elif not self.canary_alive:
                 print("Fridge seen for the first time!")
             elif self.canary_alive and shared_timestamp < timeout_point:
