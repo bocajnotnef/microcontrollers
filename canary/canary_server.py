@@ -20,12 +20,15 @@ CONFIG_FILENAME = "server.ini"
 
 
 class Listener(threading.Thread):
-    def __init__(self, clientsocket: socket.socket, address) -> None:
-        super(Listener, self).__init__()
+    def __init__(self, clientsocket: socket.socket, address, daemon=False) -> None:
+        super(Listener, self).__init__(daemon=True)
         print("Starting listener thread...")
         self.socket = clientsocket
         self.address = address
         self.buffer = ""
+
+    def __del__(self):
+        self.socket.close()
 
     def run(self):
         global threads_run
@@ -40,12 +43,13 @@ class Listener(threading.Thread):
 
 
 class Notifier(threading.Thread):
-    def __init__(self) -> None:
-        super(Notifier, self).__init__()
+    def __init__(self, daemon=False) -> None:
+        super(Notifier, self).__init__(daemon=daemon)
         print("Starting notifier thread...")
+        self.canary_alive = False
 
     @staticmethod
-    def notify():
+    def notify(text="", subject=""):
         conf = configparser.ConfigParser()
 
         conf.read(CONFIG_FILENAME)
@@ -58,14 +62,13 @@ class Notifier(threading.Thread):
 
         msg = MIMEMultipart()       # create a message
 
-        # add in the actual person name to the message template
-        message = f"Holy crap, the canary died! Time is {datetime.datetime.now()}"
+        message = text + "\n\nTime is: " + str(datetime.datetime.now())
         print(f"Message reads '{message}'")
 
         # setup the parameters of the message
         msg['From'] = from_addr
         msg['To'] = conf['DEFAULT']['EmailTarget']
-        msg['Subject'] = conf['DEFAULT']['EmailSubject']
+        msg['Subject'] = subject
 
         # add in the message body
         msg.attach(MIMEText(message, 'plain'))
@@ -84,18 +87,23 @@ class Notifier(threading.Thread):
             timeout_point = datetime.datetime.now() - datetime.timedelta(seconds=TIMEOUT_IN_SECONDS)
             if shared_timestamp is None:
                 print("Something odd happened.... (Have we made a connection yet?)")
-            elif shared_timestamp < timeout_point:
+            elif self.canary_alive and shared_timestamp < timeout_point:
                 print("OH GOD WHERE ARE THEY SOUND THE ALARM")
-                Notifier.notify()
-                threads_run = False
+                Notifier.notify("The canary has died.", "Fridge Down")
+                self.canary_alive = False
+            elif not self.canary_alive and shared_timestamp < timeout_point:
+                print("The fridge has returned!")
+                Notifier.notify("The canary is alive!", "Fridge back!")
+                self.canary_alive = True
+                pass
             else:
                 print("Notifier sleeps")
             time.sleep(TIMEOUT_IN_SECONDS)
 
 
 class Overseer(threading.Thread):
-    def __init__(self, threads):
-        super(Overseer, self).__init__()
+    def __init__(self, threads, daemon=False):
+        super(Overseer, self).__init__(daemon=daemon)
         print("Starting overseer thread...")
 
     def run(self):
@@ -107,7 +115,7 @@ class Overseer(threading.Thread):
 
         while threads_run:
             (clientsocket, address) = serversocket.accept()
-            _ = Listener(clientsocket, address)
+            _ = Listener(clientsocket, address, daemon=True)
             _.start()
 
         serversocket.close()
@@ -120,8 +128,8 @@ def main():
 
     threads_run = True
 
-    threads.append(Overseer(threads_run))
-    threads.append(Notifier())
+    threads.append(Overseer(threads_run, daemon=True))
+    threads.append(Notifier(daemon=True))
 
     for thread in threads:
         thread.start()
@@ -135,9 +143,6 @@ def main():
         threads_run = False
 
     print("Waiting for threads...")
-
-    for thread in threads:
-        thread.join()
 
 
 main()
