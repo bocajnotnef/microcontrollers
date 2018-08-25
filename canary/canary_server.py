@@ -2,6 +2,7 @@
 
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from enum import Enum
 from typing import List, Optional
 import configparser
 import datetime
@@ -19,10 +20,20 @@ TIMEOUT_IN_SECONDS = 10
 CONFIG_FILENAME = "server.ini"
 
 
+class CanaryStates(Enum):
+    CANARY_ALIVE = 1
+    CANARY_DEAD = 2
+    CANARY_NEVER_SEEN = 3
+
+
+def log(message):
+    print(f"canary_server\t{datetime.datetime.now()}\t{message}")
+
+
 class Listener(threading.Thread):
     def __init__(self, clientsocket: socket.socket, address, daemon=False) -> None:
         super(Listener, self).__init__(daemon=True)
-        print("Starting listener thread...")
+        log("Starting listener thread...")
         self.socket = clientsocket
         self.address = address
         self.buffer = ""
@@ -43,13 +54,16 @@ class Listener(threading.Thread):
 
 
 class Notifier(threading.Thread):
-    def __init__(self, daemon=False) -> None:
-        super(Notifier, self).__init__(daemon=daemon)
-        print("Starting notifier thread...")
+    def __init__(self) -> None:
+        super(Notifier, self).__init__()
+        log("Starting notifier...")
         self.canary_alive = False
 
     @staticmethod
     def notify(text="", subject=""):
+        """
+        Adapted from https://medium.freecodecamp.org/send-emails-using-code-4fcea9df63f
+        """
         conf = configparser.ConfigParser()
 
         conf.read(CONFIG_FILENAME)
@@ -83,32 +97,39 @@ class Notifier(threading.Thread):
         print("Notifier sleeping...")
         time.sleep(20)  # give time for everything to initialize
 
+        state: CanaryStates = CanaryStates.CANARY_NEVER_SEEN
+
         while threads_run:
             timeout_point = datetime.datetime.now() - datetime.timedelta(seconds=TIMEOUT_IN_SECONDS)
-            if shared_timestamp is None:
-                print("Something odd happened.... (Have we made a connection yet?)")
-            elif not self.canary_alive and shared_timestamp is None:
-                print("Fridge seen for the first time!")
-                self.canary_alive = True
-            elif self.canary_alive and shared_timestamp < timeout_point:
-                print("The canary died!")
-                Notifier.notify("The canary has died.", "Fridge Down")
-                self.canary_alive = False
-            elif not self.canary_alive and shared_timestamp > timeout_point:
-                print("The canary has returned!")
-                Notifier.notify("The canary is alive!", "Fridge back!")
-                self.canary_alive = True
-                pass
-            elif not self.canary_alive and shared_timestamp < timeout_point:
-                print(f"The canary is still dead, last seen {shared_timestamp}")
-            else:
-                print(f"Canary still alive (last seen {shared_timestamp})")
+
+            if state == CanaryStates.CANARY_NEVER_SEEN:
+                if shared_timestamp is None:
+                    log("Waiting for canary...")
+                else:
+                    log("Canary seen for the first time!")
+                    state = CanaryStates.CANARY_ALIVE
+
+            elif state == CanaryStates.CANARY_ALIVE:
+                if shared_timestamp < timeout_point:
+                    state = CanaryStates.CANARY_DEAD
+                    log("Canary has died.")
+                    Notifier.notify("The canary has died.", "Fridge down")
+                else:
+                    log("Canary still alive!")
+
+            elif state == CanaryStates.CANARY_DEAD:
+                if shared_timestamp < timeout_point:
+                    log("Canary still dead.")
+                else:
+                    state = CanaryStates.CANARY_ALIVE
+                    log("Canary has returned!")
+
             time.sleep(TIMEOUT_IN_SECONDS)
 
 
 class Overseer(threading.Thread):
-    def __init__(self, threads, daemon=False):
-        super(Overseer, self).__init__(daemon=daemon)
+    def __init__(self, threads):
+        super(Overseer, self).__init__(daemon=True)
         print("Starting overseer thread...")
 
     def run(self):
@@ -133,8 +154,8 @@ def main():
 
     threads_run = True
 
-    threads.append(Overseer(threads_run, daemon=True))
-    threads.append(Notifier(daemon=True))
+    threads.append(Overseer(threads_run))
+    threads.append(Notifier())
 
     for thread in threads:
         thread.start()
