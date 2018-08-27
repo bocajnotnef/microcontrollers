@@ -19,6 +19,9 @@ shared_timestamp: Optional[datetime.datetime] = None
 TIMEOUT_IN_SECONDS = 10
 CONFIG_FILENAME = "server.ini"
 
+conf = configparser.ConfigParser()
+conf.read(CONFIG_FILENAME)
+
 
 class CanaryStates(Enum):
     CANARY_ALIVE = 1
@@ -64,9 +67,6 @@ class Notifier(threading.Thread):
         """
         Adapted from https://medium.freecodecamp.org/send-emails-using-code-4fcea9df63f
         """
-        conf = configparser.ConfigParser()
-
-        conf.read(CONFIG_FILENAME)
 
         from_addr = conf['DEFAULT']['EmailUser']
 
@@ -74,28 +74,26 @@ class Notifier(threading.Thread):
         smtp_server.starttls()
         smtp_server.login(from_addr, conf['DEFAULT']['EmailPassword'])
 
-        msg = MIMEMultipart()       # create a message
-
         message = text + "\n\nTime is: " + str(datetime.datetime.now())
         print(f"Message reads '{message}'")
 
-        # setup the parameters of the message
-        msg['From'] = from_addr
-        msg['To'] = conf['DEFAULT']['EmailTarget']
-        msg['Subject'] = subject
+        for recipient in conf['DEFAULT']['EmailTarget'].split(','):
+            msg = MIMEMultipart()       # create a message
 
-        # add in the message body
-        msg.attach(MIMEText(message, 'plain'))
+            msg['From'] = from_addr
+            msg['To'] = recipient
+            msg['Subject'] = subject
+            msg.attach(MIMEText(message, 'plain'))
+            smtp_server.send_message(msg)
 
-        # send the message via the server set up earlier.
-        smtp_server.send_message(msg)
+            log(f"Notification sent to {recipient}")
 
     def run(self):
         global threads_run
         global shared_timestamp
 
-        print("Notifier sleeping...")
-        time.sleep(20)  # give time for everything to initialize
+        log("Notifier sleeping...")
+        time.sleep(conf['DEFAULT']['TimeoutInSeconds'])  # give time for everything to initialize
 
         state: CanaryStates = CanaryStates.CANARY_NEVER_SEEN
 
@@ -123,6 +121,7 @@ class Notifier(threading.Thread):
                 else:
                     state = CanaryStates.CANARY_ALIVE
                     log("Canary has returned!")
+                    Notifier.notify("The canary has returned", "Fridge back up")
 
             time.sleep(TIMEOUT_IN_SECONDS)
 
@@ -164,11 +163,11 @@ def main():
 
         instr = ""
         while instr != "stop":
-            instr = input("enter 'stop' to stop: ")
+            instr = input("enter 'stop' to stop.\n")
 
         threads_run = False
 
-    print("Waiting for threads...")
+    log("Waiting for threads...")
 
 
 main()
