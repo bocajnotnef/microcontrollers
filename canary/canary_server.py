@@ -16,11 +16,11 @@ shared_list: List[str] = []
 threads_run = False
 shared_timestamp: Optional[datetime.datetime] = None
 
-TIMEOUT_IN_SECONDS = 10
 CONFIG_FILENAME = "server.ini"
 
 conf = configparser.ConfigParser()
 conf.read(CONFIG_FILENAME)
+TIMEOUT_IN_SECONDS = int(conf['DEFAULT']['TimeoutInSeconds'])
 
 
 class CanaryStates(Enum):
@@ -93,7 +93,7 @@ class Notifier(threading.Thread):
         global shared_timestamp
 
         log("Notifier sleeping...")
-        time.sleep(conf['DEFAULT']['TimeoutInSeconds'])  # give time for everything to initialize
+        time.sleep(TIMEOUT_IN_SECONDS)  # give time for everything to initialize
 
         state: CanaryStates = CanaryStates.CANARY_NEVER_SEEN
 
@@ -129,7 +129,7 @@ class Notifier(threading.Thread):
 class Overseer(threading.Thread):
     def __init__(self, threads):
         super(Overseer, self).__init__(daemon=True)
-        print("Starting overseer thread...")
+        log("Starting overseer thread...")
 
     def run(self):
         global threads_run
