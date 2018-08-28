@@ -4,14 +4,13 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from enum import Enum
 from typing import List, Optional
-import configparser
+import argparse
 import datetime
+import json
 import smtplib
 import socket
 import threading
 import time
-import argparse
-import json
 
 lock = threading.Condition()
 shared_list: List[str] = []
@@ -20,9 +19,8 @@ shared_timestamp: Optional[datetime.datetime] = None
 
 CONFIG_FILENAME = "server_config.json"
 
-# conf = configparser.ConfigParser()
-# conf.read(CONFIG_FILENAME)
-# TIMEOUT_IN_SECONDS = int(conf['DEFAULT']['TimeoutInSeconds'])
+TIMEOUT_IN_SECONDS = 10
+config = None
 
 
 class CanaryStates(Enum):
@@ -69,38 +67,46 @@ class Notifier(threading.Thread):
         """
         Adapted from https://medium.freecodecamp.org/send-emails-using-code-4fcea9df63f
         """
+        global config
 
-        from_addr = conf['DEFAULT']['EmailUser']
+        from_addr = config['email']['user']
 
-        smtp_server = smtplib.SMTP(host=conf['DEFAULT']['EmailDomain'], port=conf['DEFAULT']['EmailSTARTTLSPort'])
+        smtp_server = smtplib.SMTP(host=config['email']['domain'],
+                                   port=config['email']['STARTLSPort'])
         smtp_server.starttls()
-        smtp_server.login(from_addr, conf['DEFAULT']['EmailPassword'])
+        smtp_server.login(config['email']['user'], config['email']['password'])
 
         message = text + "\n\nTime is: " + str(datetime.datetime.now())
-        print(f"Message reads '{message}'")
+        log(f"Message reads '{message}'")
 
-        for recipient in conf['DEFAULT']['EmailTarget'].split(','):
+        for recipient in config['email']['targets']:
             msg = MIMEMultipart()       # create a message
 
             msg['From'] = from_addr
             msg['To'] = recipient
             msg['Subject'] = subject
             msg.attach(MIMEText(message, 'plain'))
-            smtp_server.send_message(msg)
+
+            if config['debug']:
+                print(f"Debug mode; notification not sent. Text is: \n{msg}\n{msg}\nNot sent to {config['email']['targets']}")
+            else:
+                smtp_server.send_message(msg)
 
             log(f"Notification sent to {recipient}")
 
     def run(self):
         global threads_run
         global shared_timestamp
+        global config
 
         log("Notifier sleeping...")
-        time.sleep(TIMEOUT_IN_SECONDS)  # give time for everything to initialize
+        time.sleep(config['timeout'])  # give time for everything to initialize
 
         state: CanaryStates = CanaryStates.CANARY_NEVER_SEEN
 
         while threads_run:
-            timeout_point = datetime.datetime.now() - datetime.timedelta(seconds=TIMEOUT_IN_SECONDS)
+            timeout_point = datetime.datetime.now() - datetime.timedelta(seconds=config['timeout'])
+            Notifier.notify("this is a test and you shouldn't get this message", "teeeeessssttt")
 
             if state == CanaryStates.CANARY_NEVER_SEEN:
                 if shared_timestamp is None:
@@ -125,7 +131,7 @@ class Notifier(threading.Thread):
                     log("Canary has returned!")
                     Notifier.notify("The canary has returned", "Fridge back up")
 
-            time.sleep(TIMEOUT_IN_SECONDS)
+            time.sleep(config['timeout'])
 
 
 class Overseer(threading.Thread):
@@ -137,7 +143,7 @@ class Overseer(threading.Thread):
         global threads_run
 
         serversocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        serversocket.bind(("192.168.1.57", 5555))
+        serversocket.bind((config['server']['address'], config['server']['port']))
         serversocket.listen()
 
         while threads_run:
@@ -149,13 +155,32 @@ class Overseer(threading.Thread):
 
 
 def get_args_and_config():
+    global config
+
     parser = argparse.ArgumentParser()
-    parser.add_argument('--config-file', help="path to json config file", default="server_config.json")
+    parser.add_argument('--config-file', help="path to json config file",
+                        default="server_config.json")
     parser.add_argument('--debug-mode', help="enable debug mode", action="store_true")
     parser.add_argument('--server-port', help="specify the server port", type=int)
     parser.add_argument('--timeout', help="timeout in seconds", type=int)
+    parser.add_argument('--email-password', help="password to the email account")
+    parser.add_argument('--server-address', help="the IP address of this server")
 
-    return parser.parse_args()
+    args = parser.parse_args()
+
+    with open(args.config_file) as conf_file:
+        config = json.loads(conf_file.read())
+
+    if args.debug_mode is not None:
+        config['debug'] = args.debug_mode
+    if args.timeout is not None:
+        config['timeout'] = args.timeout
+    if args.server_port is not None:
+        config['server']['port'] = args.server_port
+    if args.email_password is not None:
+        config['email']['password'] = args.email_password
+
+    return config
 
 
 def main():
@@ -164,15 +189,12 @@ def main():
     global conf
     threads = []
 
-    args = get_args()
+    config = get_args_and_config()
 
-    with open(args.config_file) as conf_file:
-        conf = json.loads(conf_file.read())
-
-    if args.debug_mode:
-        print("asdfkljasdfj")
-        print(conf)
-        return 0
+    if config['debug']:
+        print("Debug config dump")
+        print(config)
+        # return 0
 
     threads_run = True
 
