@@ -10,15 +10,32 @@ I've been [fiddling with microcontrollers](https://highnoiseratio.org/esp8266-in
 
 It was fairly easy to modify the program for the microcontroller, I just removed the lines that dealt with sensors and simplified its message sent to the raspi. I spun up a spare email account on a domain I have and followed [a tutorial](https://medium.freecodecamp.org/send-emails-using-code-4fcea9df63f) on using email with python to get it to email me when I wanted. The rest was some simple logic!
 
+# Project Structure
 
-config file format follows:
+The `canary_server.py` file contains the server-side code, which should be run on the non-canary device. This script will read from a config file, default filename `server_config.json`, which can be overidden via command line flags.
+
+The `microcontroller/` directory contains most of the code to be put on the actual microcontroller--it doesn't include the boot script. There is also a config file here, in simpler `.ini` format, which the microcontroller reads from in order to know what wifi to connect to, with what password, etc.
+
+Server config file format follows:
 
 ```
-[DEFAULT]
-EmailDomain = mail.server.domain
-EmailUser = person@address.tld
-EmailPassword = seeecccrreeettt
-EmailSTARTTLSPort = 555
-EmailTarget = otherperson@otheraddress.tld
-EmailSubject = words
+{
+    "email": {
+        "domain": "sub.domain.tld",
+        "password": "trustno1",
+        "STARTLSPort": 587,
+        "targets": ["person@domain.tld", "otherperson@otherdomain.tld"]
+    },
+    "timeout": 30
+}
+```
+
+Microcontroller config file format follows:
+
+```
+Wifi_SSID
+Wifi_Password
+server.ip.address
+serverport
+
 ```
