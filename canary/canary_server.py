@@ -10,17 +10,19 @@ import smtplib
 import socket
 import threading
 import time
+import argparse
+import json
 
 lock = threading.Condition()
 shared_list: List[str] = []
 threads_run = False
 shared_timestamp: Optional[datetime.datetime] = None
 
-CONFIG_FILENAME = "server.ini"
+CONFIG_FILENAME = "server_config.json"
 
-conf = configparser.ConfigParser()
-conf.read(CONFIG_FILENAME)
-TIMEOUT_IN_SECONDS = int(conf['DEFAULT']['TimeoutInSeconds'])
+# conf = configparser.ConfigParser()
+# conf.read(CONFIG_FILENAME)
+# TIMEOUT_IN_SECONDS = int(conf['DEFAULT']['TimeoutInSeconds'])
 
 
 class CanaryStates(Enum):
@@ -146,10 +148,31 @@ class Overseer(threading.Thread):
         serversocket.close()
 
 
+def get_args_and_config():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--config-file', help="path to json config file", default="server_config.json")
+    parser.add_argument('--debug-mode', help="enable debug mode", action="store_true")
+    parser.add_argument('--server-port', help="specify the server port", type=int)
+    parser.add_argument('--timeout', help="timeout in seconds", type=int)
+
+    return parser.parse_args()
+
+
 def main():
     global threads_run
     global shared_list
+    global conf
     threads = []
+
+    args = get_args()
+
+    with open(args.config_file) as conf_file:
+        conf = json.loads(conf_file.read())
+
+    if args.debug_mode:
+        print("asdfkljasdfj")
+        print(conf)
+        return 0
 
     threads_run = True
 
