@@ -39,3 +39,7 @@ server.ip.address
 serverport
 
 ```
+
+# Dependencies
+
+`python-telegram-bot`: `pip install python-telegram-bot`

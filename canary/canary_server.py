@@ -9,6 +9,7 @@ import datetime
 import json
 import smtplib
 import socket
+import telegram
 import threading
 import time
 
@@ -18,7 +19,8 @@ threads_run = False
 shared_timestamp: Optional[datetime.datetime] = None
 
 CONFIG_FILENAME = "server_config.json"
-
+CONFIG_PROFILE = "productionConfig"
+TELEGRAM_BOT = None
 TIMEOUT_IN_SECONDS = 10
 config = None
 
@@ -79,6 +81,16 @@ class Notifier(threading.Thread):
         message = text + "\n\nTime is: " + str(datetime.datetime.now())
         log(f"Message reads '{message}'")
 
+        log("Sending message to Telegram...")
+        try:
+            if TELEGRAM_BOT is not None:
+                TELEGRAM_BOT.send_message(config[CONFIG_PROFILE]['chatID'], f"{subject}: {message}")
+            else:
+                log("Telegram bot not initialized.")
+        except Exception as err:
+            log(f"Unexpected error: {err}")
+
+        log("Sending message to email list...")
         for recipient in config['email']['targets']:
             msg = MIMEMultipart()       # create a message
 
@@ -88,11 +100,10 @@ class Notifier(threading.Thread):
             msg.attach(MIMEText(message, 'plain'))
 
             if config['debug']:
-                print(f"Debug mode; notification not sent. Text is: \n{msg}\n{msg}\nNot sent to {config['email']['targets']}")
+                log(f"Debug mode; notification not sent to {recipient}")
             else:
                 smtp_server.send_message(msg)
-
-            log(f"Notification sent to {recipient}")
+                log(f"Notification sent to {recipient}")
 
     def run(self):
         global threads_run
@@ -106,7 +117,6 @@ class Notifier(threading.Thread):
 
         while threads_run:
             timeout_point = datetime.datetime.now() - datetime.timedelta(seconds=config['timeout'])
-            Notifier.notify("this is a test and you shouldn't get this message", "teeeeessssttt")
 
             if state == CanaryStates.CANARY_NEVER_SEEN:
                 if shared_timestamp is None:
@@ -186,20 +196,36 @@ def get_args_and_config():
 def main():
     global threads_run
     global shared_list
-    global conf
+    global config
+    global CONFIG_PROFILE
+    global TELEGRAM_BOT
+    global shared_timestamp
     threads = []
 
     config = get_args_and_config()
 
     if config['debug']:
-        print("Debug config dump")
-        print(config)
+        log("Debug config dump")
+        log(config)
         # return 0
 
     threads_run = True
 
     threads.append(Overseer(threads_run))
     threads.append(Notifier())
+
+    CONFIG_PROFILE = "productionConfig"
+    if config['debug']:
+        CONFIG_PROFILE = "debugConfig"
+
+    chat_id = int(config[CONFIG_PROFILE]['chatID'])
+    telegram_token = config['telegramToken']
+
+    myself = telegram.Bot(token=telegram_token)
+    TELEGRAM_BOT = myself
+    log(f"Logged into telegram as {myself.get_me()}")
+
+    myself.send_message(chat_id, f"Bot online, running on {config['localIdentifier']}")
 
     for thread in threads:
         thread.start()
@@ -208,7 +234,12 @@ def main():
 
         instr = ""
         while instr != "stop":
-            instr = input("enter 'stop' to stop.\n")
+            instr = input(">>> ")
+            if instr == "ping":
+                assert(config['debug'])
+                shared_timestamp = datetime.datetime.now()
+            else:
+                print("Enter 'stop' to stop.")
 
         threads_run = False
 
