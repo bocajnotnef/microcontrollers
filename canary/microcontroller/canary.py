@@ -49,7 +49,8 @@ def do_run():
 
     socket_connected = False
 
-    while True:
+    for iteration in range(0, 20):
+        print("Iter " + iteration + " of 20")
 
         while not socket_connected:
             try:
@@ -84,3 +85,9 @@ def do_run():
         print("Sent ", q, " bytes.")
         status_led.off()
         time.sleep(2)
+
+    print("Sleeping...")
+    rtc = machine.RTC()
+    rtc.irq(trigger=rtc.ALARM0, wake=machine.DEEPSLEEP)
+    rtc.alarm(rtc.ALARM0, 30000)
+    machine.deepsleep()
